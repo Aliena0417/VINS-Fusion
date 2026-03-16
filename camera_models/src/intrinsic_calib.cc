@@ -95,10 +95,10 @@ main( int argc, char** argv )
     {
         modelType = camodocal::Camera::PINHOLE;
     }
-    else if ( boost::iequals( cameraModel, "pinhole_full" ) )
-    {
-        modelType = camodocal::Camera::PINHOLE_FULL;
-    }
+    // else if ( boost::iequals( cameraModel, "pinhole_full" ) )
+    // {
+    //     modelType = camodocal::Camera::PINHOLE_FULL;
+    // }
     else if ( boost::iequals( cameraModel, "scaramuzza" ) )
     {
         modelType = camodocal::Camera::SCARAMUZZA;
@@ -120,9 +120,9 @@ main( int argc, char** argv )
         case camodocal::Camera::PINHOLE:
             std::cout << "# INFO: Camera model: Pinhole" << std::endl;
             break;
-        case camodocal::Camera::PINHOLE_FULL:
-            std::cout << "# INFO: Camera model: PinholeFull" << std::endl;
-            break;
+        // case camodocal::Camera::PINHOLE_FULL:
+        //     std::cout << "# INFO: Camera model: PinholeFull" << std::endl;
+        //     break;
         case camodocal::Camera::SCARAMUZZA:
             std::cout << "# INFO: Camera model: Scaramuzza-Omnidirect" << std::endl;
             break;
@@ -274,7 +274,7 @@ main( int argc, char** argv )
                          0.5,
                          cv::Scalar( 255, 255, 255 ),
                          1,
-                         CV_AA );
+                         cv::LINE_AA );
             cv::imshow( "Image", cbImages.at( i ) );
             cv::waitKey( 0 );
         }
