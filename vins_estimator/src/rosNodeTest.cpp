@@ -44,7 +44,7 @@ void img1_callback(const sensor_msgs::ImageConstPtr &img_msg)
     m_buf.unlock();
 }
 
-
+//将ROS图像消息转换为OpenCV格式的图像
 cv::Mat getImageFromMsg(const sensor_msgs::ImageConstPtr &img_msg)
 {
     cv_bridge::CvImageConstPtr ptr;
@@ -72,17 +72,18 @@ void sync_process()
 {
     while(1)
     {
-        if(STEREO)
+        if(STEREO)  //获取同步误差允许范围内的图像数据，确保左右图像能够正确匹配
         {
             cv::Mat image0, image1;
             std_msgs::Header header;
             double time = 0;
             m_buf.lock();
-            if (!img0_buf.empty() && !img1_buf.empty())
+            if (!img0_buf.empty() && !img1_buf.empty()) //保证两个图像缓冲区都不为空，才能进行同步处理
             {
                 double time0 = img0_buf.front()->header.stamp.toSec();
                 double time1 = img1_buf.front()->header.stamp.toSec();
                 // 0.003s sync tolerance
+                //两个相机图像的时间差最多为0.03s
                 if(time0 < time1 - 0.003)
                 {
                     img0_buf.pop();
@@ -106,7 +107,7 @@ void sync_process()
             }
             m_buf.unlock();
             if(!image0.empty())
-                estimator.inputImage(time, image0, image1);
+                estimator.inputImage(time, image0, image1); //将同步后的图像数据传递给估计器进行处理
         }
         else
         {
@@ -132,7 +133,7 @@ void sync_process()
 }
 
 
-void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
+void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)  //IMU数据回调函数，接收IMU消息并将其转换为适当的格式传递给估计器
 {
     double t = imu_msg->header.stamp.toSec();
     double dx = imu_msg->linear_acceleration.x;
@@ -147,10 +148,12 @@ void imu_callback(const sensor_msgs::ImuConstPtr &imu_msg)
     return;
 }
 
-
+//特征点数据回调函数，接收特征点消息并将其转换为适当的格式传递给估计器
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
+    //FeatureFrame的结构：<特征点ID，<相机ID，<去畸变后的坐标、像素坐标和速度信息>>>
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
+    //记录特征点信息
     for (unsigned int i = 0; i < feature_msg->points.size(); i++)
     {
         int feature_id = feature_msg->channels[0].values[i];
@@ -170,7 +173,7 @@ void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msg)
             pts_gt[feature_id] = Eigen::Vector3d(gx, gy, gz);
             //printf("receive pts gt %d %f %f %f\n", feature_id, gx, gy, gz);
         }
-        ROS_ASSERT(z == 1);
+        ROS_ASSERT(z == 1); //确保特征点的深度值为1，因为在VINS-Fusion中，特征点深度值会被归一化为1，若不为1，则说明数据存在问题
         Eigen::Matrix<double, 7, 1> xyz_uv_velocity;
         xyz_uv_velocity << x, y, z, p_u, p_v, velocity_x, velocity_y;
         featureFrame[feature_id].emplace_back(camera_id,  xyz_uv_velocity);
@@ -224,8 +227,8 @@ void cam_switch_callback(const std_msgs::BoolConstPtr &switch_msg)
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "vins_estimator");
-    ros::NodeHandle n("~");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::NodeHandle n("~"); //当前ROS节点的句柄
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);    //设置ROS日志输出的级别，使终端更简洁
 
     if(argc != 2)
     {
@@ -238,7 +241,7 @@ int main(int argc, char **argv)
     string config_file = argv[1];
     printf("config_file: %s\n", argv[1]);
 
-    readParameters(config_file);
+    readParameters(config_file);    //从配置文件中读取参数并进行初始化设置
     estimator.setParameter();
 
 #ifdef EIGEN_DONT_PARALLELIZE

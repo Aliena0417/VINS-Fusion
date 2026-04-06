@@ -8,7 +8,7 @@ num_of_cam: 2
 imu_topic: "/camera/imu"
 image0_topic: "/camera/infra1/image_rect_raw"
 image1_topic: "/camera/infra2/image_rect_raw"
-output_path: "/home/dji/output/"
+output_path: "/home/zmh/data/vins_data/vins_fusion/"
 
 cam0_calib: "left.yaml"
 cam1_calib: "right.yaml"
@@ -17,30 +17,26 @@ image_height: 480
    
 
 # Extrinsic parameter between IMU and Camera.
-estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
                         # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
 
 body_T_cam0: !!opencv-matrix
    rows: 4
    cols: 4
    dt: d
-   data: [ -5.7586305857286746e-03, -4.0463318787729019e-03,
-       9.9997523237933461e-01, 2.0329267950355900e-02,
-       -9.9998287214160420e-01, -1.0224590553211677e-03,
-       -5.7628118925283633e-03, 7.9325209639615653e-03,
-       1.0457519809151661e-03, -9.9999129084997906e-01,
-       -4.0403746097850135e-03, 2.8559824645148020e-03, 0., 0., 0., 1. ]
+   data: [ 0.9999842604142349, 0.0012351591571119, 0.0054729613238685, 0.0004011350675393,
+          -0.0012361315283364, 0.9999992208007751, 0.0001742890923131, 0.001155455487688,
+          -0.005472741784573, -0.0001810516491208, 0.9999850080464507, 0.0010913662095105,
+           0.0, 0.0, 0.0, 1.0 ]
 
 body_T_cam1: !!opencv-matrix
    rows: 4
    cols: 4
    dt: d
-   data: [ -1.0021770212322867e-03, 3.6313480322730518e-04,
-       9.9999943188700535e-01, 1.5285779565991807e-02,
-       -9.9999216342926500e-01, -3.8303422615924010e-03,
-       -1.0007788055728661e-03, -5.2435791444330505e-02,
-       3.8299766679101843e-03, -9.9999259827824449e-01,
-       3.6697063849344680e-04, 8.6931302450199057e-03, 0., 0., 0., 1. ]
+   data: [ 0.9999987866043376, 0.0009036152860223, 0.0012689638556904, 0.0505291103073369,
+          -0.0009001898403122, 0.9999959568769725, -0.0026973853931803, 0.0014176625477724,
+          -0.001271396123787, 0.0026962398118139, 0.9999955569115162, 0.0009013220498769,
+           0.0, 0.0, 0.0, 1.0 ]
 
 #Multiple thread support
 multiple_thread: 1
@@ -59,17 +55,17 @@ max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 #imu parameters       The more accurate parameters you provide, the better performance
-acc_n: 0.1          # accelerometer measurement noise standard deviation. #0.2   0.04
-gyr_n: 0.01         # gyroscope measurement noise standard deviation.     #0.05  0.004
-acc_w: 0.001         # accelerometer bias random work noise standard deviation.  #0.002
-gyr_w: 0.0001       # gyroscope bias random work noise standard deviation.     #4.0e-5
+acc_n: 0.2745152607486168          # accelerometer measurement noise standard deviation. #0.2   0.04
+gyr_n: 0.02596795456082138         # gyroscope measurement noise standard deviation.     #0.05  0.004
+acc_w: 0.005469994134194956         # accelerometer bias random work noise standard deviation.  #0.002
+gyr_w: 0.00016700765681802455       # gyroscope bias random work noise standard deviation.     #4.0e-5
 g_norm: 9.805         # gravity magnitude
 
 #unsynchronization parameters
 estimate_td: 1                      # online estimate time offset between camera and imu
-td: 0.00                             # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+td: -0.006469079138426182                             # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #loop closure parameters
-load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'
-pose_graph_save_path: "/home/dji/output/pose_graph/" # save and load path
-save_image: 0                   # save image in pose graph for visualization prupose; you can close this function by setting 0 
+load_previous_pose_graph: 1        # load and reuse previous pose graph; load from 'pose_graph_save_path'
+pose_graph_save_path: "/home/zmh/data/vins_data/vins_fusion/pose_graph/" # save and load path
+save_image: 0                   # save image in pose graph for visualization prupose; you can close this function by setting 0

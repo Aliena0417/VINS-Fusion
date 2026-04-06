@@ -52,6 +52,7 @@ FeatureTracker::FeatureTracker()
     hasPrediction = false;
 }
 
+//对特征点进行排序和筛选
 void FeatureTracker::setMask()
 {
     mask = cv::Mat(row, col, CV_8UC1, cv::Scalar(255));
@@ -59,9 +60,11 @@ void FeatureTracker::setMask()
     // prefer to keep features that are tracked for long time
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
+    //将当前帧的特征点、跟踪计数和ID组合乘一个容器
     for (unsigned int i = 0; i < cur_pts.size(); i++)
         cnt_pts_id.push_back(make_pair(track_cnt[i], make_pair(cur_pts[i], ids[i])));
 
+        //按照追踪次数从大到小排序，优先保留追踪时间长的特征点
     sort(cnt_pts_id.begin(), cnt_pts_id.end(), [](const pair<int, pair<cv::Point2f, int>> &a, const pair<int, pair<cv::Point2f, int>> &b)
          {
             return a.first > b.first;
@@ -71,6 +74,8 @@ void FeatureTracker::setMask()
     ids.clear();
     track_cnt.clear();
 
+    //若特征点所在位置的掩膜值为255，保留特征点
+    //划定MIN_DIST范围内的区域为0，避免新特征点过于集中
     for (auto &it : cnt_pts_id)
     {
         if (mask.at<uchar>(it.second.first) == 255)
@@ -91,6 +96,7 @@ double FeatureTracker::distance(cv::Point2f &pt1, cv::Point2f &pt2)
     return sqrt(dx * dx + dy * dy);
 }
 
+//对每帧图像的特征点进行提取和跟踪
 map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackImage(double _cur_time, const cv::Mat &_img, const cv::Mat &_img1)
 {
     TicToc t_r;
@@ -175,7 +181,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         ROS_DEBUG("detect feature begins");
         TicToc t_t;
         int n_max_cnt = MAX_CNT - static_cast<int>(cur_pts.size());
-        if (n_max_cnt > 0)
+        if (n_max_cnt > 0)  //当当前特征点数量小于最大特征点数量时，进行新特征点的检测
         {
             if(mask.empty())
                 cout << "mask is empty " << endl;
@@ -196,6 +202,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         //printf("feature cnt after add %d\n", (int)ids.size());
     }
 
+    //去畸变并计算速度
     cur_un_pts = undistortedPts(cur_pts, m_camera[0]);
     pts_velocity = ptsVelocity(ids, cur_un_pts, cur_un_pts_map, prev_un_pts_map);
 
@@ -206,6 +213,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
         cur_un_right_pts.clear();
         right_pts_velocity.clear();
         cur_un_right_pts_map.clear();
+        //若左图有特征点，则在右图中跟踪这些特征点
         if(!cur_pts.empty())
         {
             //printf("stereo image; track feature on right image\n");
@@ -213,22 +221,24 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             vector<uchar> status, statusRightLeft;
             vector<float> err;
             // cur left ---- cur right
+            //正向跟踪
             cv::calcOpticalFlowPyrLK(cur_img, rightImg, cur_pts, cur_right_pts, status, err, cv::Size(21, 21), 3);
             // reverse check cur right ---- cur left
             if(FLOW_BACK)
             {
+                //使用右图中的特征点反向跟踪回左图
                 cv::calcOpticalFlowPyrLK(rightImg, cur_img, cur_right_pts, reverseLeftPts, statusRightLeft, err, cv::Size(21, 21), 3);
                 for(size_t i = 0; i < status.size(); i++)
                 {
+                    //比较反向跟踪的特征点位置与原始特征点的距离，阈值内则认为跟踪有效
                     if(status[i] && statusRightLeft[i] && inBorder(cur_right_pts[i]) && distance(cur_pts[i], reverseLeftPts[i]) <= 0.5)
                         status[i] = 1;
                     else
                         status[i] = 0;
                 }
             }
-
             ids_right = ids;
-            reduceVector(cur_right_pts, status);
+            reduceVector(cur_right_pts, status);    //对右图的特征点进行筛选，只保留跟踪成功且满足条件的特征点
             reduceVector(ids_right, status);
             // only keep left-right pts
             /*
@@ -238,6 +248,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
             reduceVector(cur_un_pts, status);
             reduceVector(pts_velocity, status);
             */
+           //去畸变并计算速度
             cur_un_right_pts = undistortedPts(cur_right_pts, m_camera[1]);
             right_pts_velocity = ptsVelocity(ids_right, cur_un_right_pts, cur_un_right_pts_map, prev_un_right_pts_map);
         }
@@ -257,6 +268,7 @@ map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> FeatureTracker::trackIm
     for(size_t i = 0; i < cur_pts.size(); i++)
         prevLeftPtsMap[ids[i]] = cur_pts[i];
 
+    //将特征点的ID、相机ID、去畸变后的坐标、像素坐标和速度信息组织成一个map结构，供后续使用
     map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> featureFrame;
     for (size_t i = 0; i < ids.size(); i++)
     {
@@ -388,6 +400,7 @@ void FeatureTracker::showUndistortion(const string &name)
     // cv::waitKey(0);
 }
 
+//将像素坐标转换为去畸变后的归一化坐标
 vector<cv::Point2f> FeatureTracker::undistortedPts(vector<cv::Point2f> &pts, camodocal::CameraPtr cam)
 {
     vector<cv::Point2f> un_pts;
@@ -401,17 +414,20 @@ vector<cv::Point2f> FeatureTracker::undistortedPts(vector<cv::Point2f> &pts, cam
     return un_pts;
 }
 
+//计算特征点的速度
 vector<cv::Point2f> FeatureTracker::ptsVelocity(vector<int> &ids, vector<cv::Point2f> &pts, 
                                             map<int, cv::Point2f> &cur_id_pts, map<int, cv::Point2f> &prev_id_pts)
 {
     vector<cv::Point2f> pts_velocity;
     cur_id_pts.clear();
+    //将当前帧的特征点ID和坐标存入cur_id_pts中，方便后续计算速度
     for (unsigned int i = 0; i < ids.size(); i++)
     {
         cur_id_pts.insert(make_pair(ids[i], pts[i]));
     }
 
     // caculate points velocity
+    //计算特征点速度，如果当前帧的特征点在上一帧中也存在，则根据两帧之间的时间差和像素坐标差计算速度；否则将速度设为0
     if (!prev_id_pts.empty())
     {
         double dt = cur_time - prev_time;
@@ -441,6 +457,7 @@ vector<cv::Point2f> FeatureTracker::ptsVelocity(vector<int> &ids, vector<cv::Poi
     return pts_velocity;
 }
 
+//可视化特征点的跟踪结果
 void FeatureTracker::drawTrack(const cv::Mat &imLeft, const cv::Mat &imRight, 
                                vector<int> &curLeftIds,
                                vector<cv::Point2f> &curLeftPts, 
@@ -450,11 +467,12 @@ void FeatureTracker::drawTrack(const cv::Mat &imLeft, const cv::Mat &imRight,
     //int rows = imLeft.rows;
     int cols = imLeft.cols;
     if (!imRight.empty() && stereo_cam)
-        cv::hconcat(imLeft, imRight, imTrack);
+        cv::hconcat(imLeft, imRight, imTrack);  //拼接左右图像
     else
         imTrack = imLeft.clone();
     cv::cvtColor(imTrack, imTrack, cv::COLOR_GRAY2RGB);
 
+    //跟踪时间长的特征点颜色更接近紫色，跟踪时间短的特征点颜色更接近红色
     for (size_t j = 0; j < curLeftPts.size(); j++)
     {
         double len = std::min(1.0, 1.0 * track_cnt[j] / 20);

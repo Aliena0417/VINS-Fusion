@@ -65,6 +65,7 @@ T readParam(ros::NodeHandle &n, std::string name)
 
 void readParameters(std::string config_file)
 {
+    //检测配置文件是否存在以及是否能被正常打开
     FILE *fh = fopen(config_file.c_str(),"r");
     if(fh == NULL){
         ROS_WARN("config_file dosen't exist; wrong config_file path");
@@ -73,6 +74,7 @@ void readParameters(std::string config_file)
     }
     fclose(fh);
 
+    //使用OpenCV的FileStorage类读取配置文件中的参数
     cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
     if(!fsSettings.isOpened())
     {
@@ -114,9 +116,10 @@ void readParameters(std::string config_file)
     fout.close();
 
     ESTIMATE_EXTRINSIC = fsSettings["estimate_extrinsic"];
-    if (ESTIMATE_EXTRINSIC == 2)
+    if (ESTIMATE_EXTRINSIC == 2)    //没有外参先验，在线标定外参
     {
         ROS_WARN("have no prior about extrinsic param, calibrate extrinsic param");
+        //初始化旋转矩阵为单位矩阵，平移向量为零向量
         RIC.push_back(Eigen::Matrix3d::Identity());
         TIC.push_back(Eigen::Vector3d::Zero());
         EX_CALIB_RESULT_PATH = OUTPUT_FOLDER + "/extrinsic_parameter.csv";
@@ -145,10 +148,10 @@ void readParameters(std::string config_file)
     if(NUM_OF_CAM != 1 && NUM_OF_CAM != 2)
     {
         printf("num_of_cam should be 1 or 2\n");
-        assert(0);
+        assert(0);  //程序打印错误信息后终止运行
     }
 
-
+    //提取配置文件所在的目录路径
     int pn = config_file.find_last_of('/');
     std::string configPath = config_file.substr(0, pn);
     
@@ -174,8 +177,8 @@ void readParameters(std::string config_file)
         TIC.push_back(T.block<3, 1>(0, 3));
     }
 
-    INIT_DEPTH = 5.0;
-    BIAS_ACC_THRESHOLD = 0.1;
+    INIT_DEPTH = 5.0;   //地图点(3D点)的初始深度值
+    BIAS_ACC_THRESHOLD = 0.1;   //加速度计和陀螺仪的偏置阈值，超过该值则认为传感器存在较大的偏置，需要进行校准或修正
     BIAS_GYR_THRESHOLD = 0.1;
 
     TD = fsSettings["td"];
@@ -196,5 +199,5 @@ void readParameters(std::string config_file)
         printf("no imu, fix extrinsic param; no time offset calibration\n");
     }
 
-    fsSettings.release();
+    fsSettings.release();   //释放文件存储对象所占用的资源
 }

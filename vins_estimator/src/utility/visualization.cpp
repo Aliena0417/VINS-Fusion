@@ -31,7 +31,7 @@ static Vector3d last_path(0.0, 0.0, 0.0);
 
 size_t pub_counter = 0;
 
-void registerPub(ros::NodeHandle &n)
+void registerPub(ros::NodeHandle &n)    //注册多个发布者，绑定主题并设置可视化参数
 {
     pub_latest_odometry = n.advertise<nav_msgs::Odometry>("imu_propagate", 1000);
     pub_path = n.advertise<nav_msgs::Path>("path", 1000);
@@ -52,6 +52,7 @@ void registerPub(ros::NodeHandle &n)
 
 void pubLatestOdometry(const Eigen::Vector3d &P, const Eigen::Quaterniond &Q, const Eigen::Vector3d &V, double t)
 {
+    //P为位置向量，Q为四元数表示的姿态，V为线速度向量，t为时间戳
     nav_msgs::Odometry odometry;
     odometry.header.stamp = ros::Time(t);
     odometry.header.frame_id = "world";

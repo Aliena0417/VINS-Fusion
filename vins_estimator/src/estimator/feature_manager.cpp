@@ -53,6 +53,7 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
 {
     ROS_DEBUG("input feature: %d", (int)image.size());
     ROS_DEBUG("num of feature: %d", getFeatureCount());
+    //记录视差和特征点数量等信息，以判断当前帧是否为关键帧
     double parallax_sum = 0;
     int parallax_num = 0;
     last_track_num = 0;
@@ -74,27 +75,31 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
                           {
             return it.feature_id == feature_id;
                           });
-
+        
+        //该特征点之前未被观测过，则将其加入feature容器中，并记录新特征点数量
         if (it == feature.end())
         {
             feature.push_back(FeaturePerId(feature_id, frame_count));
             feature.back().feature_per_frame.push_back(f_per_fra);
             new_feature_num++;
         }
+        //更新已有特征点
         else if (it->feature_id == feature_id)
         {
             it->feature_per_frame.push_back(f_per_fra);
             last_track_num++;
-            if( it-> feature_per_frame.size() >= 4)
+            if( it-> feature_per_frame.size() >= 4) //长时间被跟踪的特征点
                 long_track_num++;
         }
     }
 
     //if (frame_count < 2 || last_track_num < 20)
     //if (frame_count < 2 || last_track_num < 20 || new_feature_num > 0.5 * last_track_num)
+    //当当前帧数小于2，或者跟踪到的旧特征点数量小于20，或者新特征点数量大于跟踪到的特征点数量的一半时，直接返回true，认为当前帧为关键帧
     if (frame_count < 2 || last_track_num < 20 || long_track_num < 40 || new_feature_num > 0.5 * last_track_num)
         return true;
 
+    //根据两帧之间的视差判断是否设置为关键帧，视差过小则不设置为关键帧，继续追踪特征点
     for (auto &it_per_id : feature)
     {
         if (it_per_id.start_frame <= frame_count - 2 &&
@@ -211,7 +216,7 @@ void FeatureManager::triangulatePoint(Eigen::Matrix<double, 3, 4> &Pose0, Eigen:
     point_3d(2) = triangulated_point(2) / triangulated_point(3);
 }
 
-
+//通过匹配的三维和二维点来估计相机的位姿，使得三维点投影到图像平面后的误差最小
 bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P, 
                                       vector<cv::Point2f> &pts2D, vector<cv::Point3f> &pts3D)
 {
@@ -256,22 +261,23 @@ bool FeatureManager::solvePoseByPnP(Eigen::Matrix3d &R, Eigen::Vector3d &P,
     return true;
 }
 
+//通过PnP算法初始化当前帧的位姿
 void FeatureManager::initFramePoseByPnP(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vector3d tic[], Matrix3d ric[])
 {
-
+    //保证当前帧不是第一帧，才能进行位姿初始化
     if(frameCnt > 0)
     {
         vector<cv::Point2f> pts2D;
         vector<cv::Point3f> pts3D;
         for (auto &it_per_id : feature)
         {
-            if (it_per_id.estimated_depth > 0)
+            if (it_per_id.estimated_depth > 0)  //确保当前特征点的深度已经被估计
             {
-                int index = frameCnt - it_per_id.start_frame;
-                if((int)it_per_id.feature_per_frame.size() >= index + 1)
+                int index = frameCnt - it_per_id.start_frame;   //当前帧相对于该特征点首次观测帧的偏移量
+                if((int)it_per_id.feature_per_frame.size() >= index + 1)    //确保当前帧能够观测到该特征点
                 {
-                    Vector3d ptsInCam = ric[0] * (it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth) + tic[0];
-                    Vector3d ptsInWorld = Rs[it_per_id.start_frame] * ptsInCam + Ps[it_per_id.start_frame];
+                    Vector3d ptsInCam = ric[0] * (it_per_id.feature_per_frame[0].point * it_per_id.estimated_depth) + tic[0];   //特征点在IMU坐标系下的三维坐标(之前是归一化坐标，乘以深度后得到相机坐标系下的三维坐标，再通过外参转换到IMU坐标系下)
+                    Vector3d ptsInWorld = Rs[it_per_id.start_frame] * ptsInCam + Ps[it_per_id.start_frame]; //特征点的深度是基于start_frame帧的位姿估计的，因此需要将特征点从start_frame帧的坐标系转换到世界坐标系下
 
                     cv::Point3f point3d(ptsInWorld.x(), ptsInWorld.y(), ptsInWorld.z());
                     cv::Point2f point2d(it_per_id.feature_per_frame[index].point.x(), it_per_id.feature_per_frame[index].point.y());
@@ -303,12 +309,14 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
 {
     for (auto &it_per_id : feature)
     {
-        if (it_per_id.estimated_depth > 0)
+        if (it_per_id.estimated_depth > 0)  //该特征点的深度已经被估计过了，则不需要再进行三角化，直接跳过
             continue;
 
+        //使用双目观测进行三角化，求解特征点的三维坐标，并根据三维坐标计算深度
         if(STEREO && it_per_id.feature_per_frame[0].is_stereo)
         {
-            int imu_i = it_per_id.start_frame;
+            //构造左右相机的位姿
+            int imu_i = it_per_id.start_frame;  //特征点首次被观测到的帧索引
             Eigen::Matrix<double, 3, 4> leftPose;
             Eigen::Vector3d t0 = Ps[imu_i] + Rs[imu_i] * tic[0];
             Eigen::Matrix3d R0 = Rs[imu_i] * ric[0];
@@ -323,6 +331,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             rightPose.rightCols<1>() = -R1.transpose() * t1;
             //cout << "right pose " << rightPose << endl;
 
+            //提取特征点的左右观测
             Eigen::Vector2d point0, point1;
             Eigen::Vector3d point3d;
             point0 = it_per_id.feature_per_frame[0].point.head(2);
@@ -330,7 +339,9 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             //cout << "point0 " << point0.transpose() << endl;
             //cout << "point1 " << point1.transpose() << endl;
 
+            //进行三角化，得到左相机坐标系下的特征点三维坐标
             triangulatePoint(leftPose, rightPose, point0, point1, point3d);
+            //转换到世界坐标系下并计算深度
             Eigen::Vector3d localPoint;
             localPoint = leftPose.leftCols<3>() * point3d + leftPose.rightCols<1>();
             double depth = localPoint.z();
@@ -527,6 +538,7 @@ void FeatureManager::removeFront(int frame_count)
     }
 }
 
+//计算当前帧与前一帧之间的视差，并返回最大的视差值
 double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int frame_count)
 {
     //check the second last frame is keyframe or not

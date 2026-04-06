@@ -111,6 +111,7 @@ void Estimator::setParameter()
     featureTracker.readIntrinsicParameter(CAM_NAMES);
 
     std::cout << "MULTIPLE_THREAD is " << MULTIPLE_THREAD << '\n';
+    //当MULTIPLE_THREAD 为 true时，程序会创建一个新的线程（processThread），并将 processMeasurements() 函数作为该线程的入口函数。
     if (MULTIPLE_THREAD && !initThreadFlag)
     {
         initThreadFlag = true;
@@ -169,6 +170,7 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
         featureFrame = featureTracker.trackImage(t, _img, _img1);
     //printf("featureTracker time: %f\n", featureTrackerTime.toc());
 
+    //特征点跟踪可视化
     if (SHOW_TRACK)
     {
         cv::Mat imgTrack = featureTracker.getTrackImage();
@@ -198,17 +200,18 @@ void Estimator::inputImage(double t, const cv::Mat &_img, const cv::Mat &_img1)
 
 void Estimator::inputIMU(double t, const Vector3d &linearAcceleration, const Vector3d &angularVelocity)
 {
+    //使用线程锁在保证线程安全的情况下记录IMU数据至缓冲区
     mBuf.lock();
     accBuf.push(make_pair(t, linearAcceleration));
     gyrBuf.push(make_pair(t, angularVelocity));
     //printf("input imu with time %f \n", t);
     mBuf.unlock();
 
-    if (solver_flag == NON_LINEAR)
+    if (solver_flag == NON_LINEAR)  //若估计器处于非线性优化状态，则使用IMU数据进行快速预测并发布最新的里程计信息
     {
         mPropagate.lock();
-        fastPredictIMU(t, linearAcceleration, angularVelocity);
-        pubLatestOdometry(latest_P, latest_Q, latest_V, t);
+        fastPredictIMU(t, linearAcceleration, angularVelocity); //根据IMU数据更新最新的位姿和速度预测
+        pubLatestOdometry(latest_P, latest_Q, latest_V, t); //发布最新的里程计信息，包括位置、姿态和速度
         mPropagate.unlock();
     }
 }
@@ -223,7 +226,7 @@ void Estimator::inputFeature(double t, const map<int, vector<pair<int, Eigen::Ma
         processMeasurements();
 }
 
-
+//从IMU数据缓冲区提取指定时间区间内的加速度和角速度数据
 bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::Vector3d>> &accVector, 
                                 vector<pair<double, Eigen::Vector3d>> &gyrVector)
 {
@@ -234,6 +237,7 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
     }
     //printf("get imu from %f %f\n", t0, t1);
     //printf("imu fornt time %f   imu end time %f\n", accBuf.front().first, accBuf.back().first);
+    //移除早于上一帧图像的IMU数据，并保证缓冲区中的IMU数据能够覆盖当前图像数据的时间戳
     if(t1 <= accBuf.back().first)
     {
         while (accBuf.front().first <= t0)
@@ -259,6 +263,7 @@ bool Estimator::getIMUInterval(double t0, double t1, vector<pair<double, Eigen::
     return true;
 }
 
+//当IMU数据不为0且比当前图像数据的时间戳更大时，说明IMU数据已经准备就绪
 bool Estimator::IMUAvailable(double t)
 {
     if(!accBuf.empty() && t <= accBuf.back().first)
@@ -278,7 +283,7 @@ void Estimator::processMeasurements()
         {
             feature = featureBuf.front();
             curTime = feature.first + td;
-            while(1)
+            while(1)    //等待IMU数据到达，确保在处理图像数据时，IMU数据已经准备就绪，以便进行后续的状态预测和优化
             {
                 if ((!USE_IMU  || IMUAvailable(feature.first + td)))
                     break;
@@ -342,6 +347,7 @@ void Estimator::processMeasurements()
 }
 
 
+//初始化第一个IMU位姿，计算平均加速度并根据重力方向确定初始旋转矩阵
 void Estimator::initFirstIMUPose(vector<pair<double, Eigen::Vector3d>> &accVector)
 {
     printf("init first imu pose\n");
@@ -371,7 +377,7 @@ void Estimator::initFirstPose(Eigen::Vector3d p, Eigen::Matrix3d r)
     initR = r;
 }
 
-
+//计算和更新最新的位姿和速度预测，并发布最新的里程计信息
 void Estimator::processIMU(double t, double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
 {
     if (!first_imu)
@@ -412,6 +418,8 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
+
+    /******1. 将特征点信息加入f_manager中，同时进行是否为关键帧的检查******/ 
     if (f_manager.addFeatureCheckParallax(frame_count, image, td))
     {
         marginalization_flag = MARGIN_OLD;
@@ -430,7 +438,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
 
     ImageFrame imageframe(image, header);
     imageframe.pre_integration = tmp_pre_integration;
-    all_image_frame.insert(make_pair(header, imageframe));
+    all_image_frame.insert(make_pair(header, imageframe));  //保存所有图像帧数据
     tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
 
     if(ESTIMATE_EXTRINSIC == 2)
@@ -440,7 +448,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         {
             vector<pair<Vector3d, Vector3d>> corres = f_manager.getCorresponding(frame_count - 1, frame_count);
             Matrix3d calib_ric;
-            if (initial_ex_rotation.CalibrationExRotation(corres, pre_integrations[frame_count]->delta_q, calib_ric))
+            if (initial_ex_rotation.CalibrationExRotation(corres, pre_integrations[frame_count]->delta_q, calib_ric))   //外参初始化
             {
                 ROS_WARN("initial extrinsic rotation calib success");
                 ROS_WARN_STREAM("initial extrinsic rotation: " << endl << calib_ric);
@@ -1570,13 +1578,14 @@ void Estimator::outliersRejection(set<int> &removeIndex)
 
 void Estimator::fastPredictIMU(double t, Eigen::Vector3d linear_acceleration, Eigen::Vector3d angular_velocity)
 {
-    double dt = t - latest_time;
+    double dt = t - latest_time;    //时间间隔
     latest_time = t;
     Eigen::Vector3d un_acc_0 = latest_Q * (latest_acc_0 - latest_Ba) - g;
     Eigen::Vector3d un_gyr = 0.5 * (latest_gyr_0 + angular_velocity) - latest_Bg;
-    latest_Q = latest_Q * Utility::deltaQ(un_gyr * dt);
+    latest_Q = latest_Q * Utility::deltaQ(un_gyr * dt); //角速度积分得到旋转增量，更新姿态
     Eigen::Vector3d un_acc_1 = latest_Q * (linear_acceleration - latest_Ba) - g;
     Eigen::Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
+    //位置和速度更新
     latest_P = latest_P + dt * latest_V + 0.5 * dt * dt * un_acc;
     latest_V = latest_V + dt * un_acc;
     latest_acc_0 = linear_acceleration;
