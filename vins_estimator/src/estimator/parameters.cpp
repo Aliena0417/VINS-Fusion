@@ -45,6 +45,7 @@ int MIN_DIST;
 double F_THRESHOLD;
 int SHOW_TRACK;
 int FLOW_BACK;
+int FX;
 
 
 template <typename T>
@@ -159,6 +160,15 @@ void readParameters(std::string config_file)
     fsSettings["cam0_calib"] >> cam0Calib;
     std::string cam0Path = configPath + "/" + cam0Calib;
     CAM_NAMES.push_back(cam0Path);
+
+    // 读取相机0的标定文件
+    cv::FileStorage fsCam0(cam0Path, cv::FileStorage::READ);
+    if (!fsCam0.isOpened())
+    {
+        ROS_ERROR_STREAM("Failed to open cam0 calibration file: " << cam0Path);
+        return;
+    }
+    fsCam0["projection_parameters"]["fx"] >> FX;
 
     if(NUM_OF_CAM == 2)
     {

@@ -331,6 +331,9 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             rightPose.rightCols<1>() = -R1.transpose() * t1;
             //cout << "right pose " << rightPose << endl;
 
+            double baseline = (t1 - t0).norm();
+            ROS_INFO("TEST BASELINE: %f", baseline);
+
             //提取特征点的左右观测
             Eigen::Vector2d point0, point1;
             Eigen::Vector3d point3d;
@@ -339,12 +342,15 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             //cout << "point0 " << point0.transpose() << endl;
             //cout << "point1 " << point1.transpose() << endl;
 
+            double depth_disparity = calculateDepthFromDisparity(point0, point1, baseline);
             //进行三角化，得到左相机坐标系下的特征点三维坐标
             triangulatePoint(leftPose, rightPose, point0, point1, point3d);
             //转换到世界坐标系下并计算深度
             Eigen::Vector3d localPoint;
             localPoint = leftPose.leftCols<3>() * point3d + leftPose.rightCols<1>();
             double depth = localPoint.z();
+
+            ROS_INFO("feature id %d, depth from disparity: %f, depth from triangulation: %f", it_per_id.feature_id, depth_disparity, depth);
             if (depth > 0)
                 it_per_id.estimated_depth = depth;
             else
@@ -572,4 +578,16 @@ double FeatureManager::compensatedParallax2(const FeaturePerId &it_per_id, int f
     ans = max(ans, sqrt(min(du * du + dv * dv, du_comp * du_comp + dv_comp * dv_comp)));
 
     return ans;
+}
+
+double FeatureManager::calculateDepthFromDisparity(const Eigen::Vector2d &point0, const Eigen::Vector2d &point1, double baseline)
+{
+    double disparity = std::sqrt(std::pow(point0.x() - point1.x(), 2) + std::pow(point0.y() - point1.y(), 2));
+    if (disparity <= 0)
+        return INIT_DEPTH;
+
+    double depth = (1.0 * FX * baseline) / (disparity * FOCAL_LENGTH);
+
+    // 如果深度大于 0，返回深度；否则返回默认深度
+    return (depth > 0) ? depth : INIT_DEPTH;
 }

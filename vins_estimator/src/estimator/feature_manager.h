@@ -102,6 +102,7 @@ class FeatureManager
     void removeBack();
     void removeFront(int frame_count);
     void removeOutlier(set<int> &outlierIndex);
+    double calculateDepthFromDisparity(const Eigen::Vector2d &point0, const Eigen::Vector2d &point1, double baseline);
     list<FeaturePerId> feature;
     int last_track_num;
     double last_average_parallax;
