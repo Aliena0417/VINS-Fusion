@@ -351,8 +351,8 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             double depth = localPoint.z();
 
             ROS_INFO("feature id %d, depth from disparity: %f, depth from triangulation: %f", it_per_id.feature_id, depth_disparity, depth);
-            if (depth > 0)
-                it_per_id.estimated_depth = depth;
+            if (depth_disparity > 0)
+                it_per_id.estimated_depth = depth_disparity;
             else
                 it_per_id.estimated_depth = INIT_DEPTH;
             /*

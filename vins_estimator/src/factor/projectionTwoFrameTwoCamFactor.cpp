@@ -57,6 +57,8 @@ bool ProjectionTwoFrameTwoCamFactor::Evaluate(double const *const *parameters, d
 
     double inv_dep_i = parameters[4][0];
 
+    double depth_weight = 1.0 / (GAMMA / inv_dep_i);
+
     double td = parameters[5][0];
 
     Eigen::Vector3d pts_i_td, pts_j_td;
@@ -77,7 +79,8 @@ bool ProjectionTwoFrameTwoCamFactor::Evaluate(double const *const *parameters, d
     residual = (pts_camera_j / dep_j).head<2>() - pts_j_td.head<2>();
 #endif
 
-    residual = sqrt_info * residual;
+    residual = depth_weight * depth_weight * sqrt_info * residual;
+    // residual = sqrt_info * residual;
 
     if (jacobians)
     {
@@ -101,7 +104,8 @@ bool ProjectionTwoFrameTwoCamFactor::Evaluate(double const *const *parameters, d
         reduce << 1. / dep_j, 0, -pts_camera_j(0) / (dep_j * dep_j),
             0, 1. / dep_j, -pts_camera_j(1) / (dep_j * dep_j);
 #endif
-        reduce = sqrt_info * reduce;
+        reduce = sqrt_info * depth_weight * depth_weight * reduce;
+        // reduce = sqrt_info * reduce;
 
         if (jacobians[0])
         {

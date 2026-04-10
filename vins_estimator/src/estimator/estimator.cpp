@@ -1057,6 +1057,7 @@ void Estimator::optimization()
         problem.AddResidualBlock(marginalization_factor, NULL,
                                  last_marginalization_parameter_blocks);
     }
+    //添加IMU残差项
     if(USE_IMU)
     {
         for (int i = 0; i < frame_count; i++)
@@ -1069,6 +1070,7 @@ void Estimator::optimization()
         }
     }
 
+    //添加视觉残差项
     int f_m_cnt = 0;
     int feature_index = -1;
     for (auto &it_per_id : f_manager.feature)

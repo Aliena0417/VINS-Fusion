@@ -168,7 +168,29 @@ void readParameters(std::string config_file)
         ROS_ERROR_STREAM("Failed to open cam0 calibration file: " << cam0Path);
         return;
     }
-    fsCam0["projection_parameters"]["fx"] >> FX;
+    // 判断相机模型类型
+    std::string model_type;
+    fsCam0["model_type"] >> model_type;
+    if (model_type == "MEI")
+    {
+        double gamma1, xi;
+        fsCam0["projection_parameters"]["gamma1"] >> gamma1;
+        fsCam0["mirror_parameters"]["xi"] >> xi;
+
+        // 计算等效焦距
+        FX = gamma1 / (1 + xi);
+        ROS_INFO_STREAM("MEI model detected. Effective focal length (f_eff): " << FX);
+    }
+    else if (model_type == "PINHOLE")
+    {
+        fsCam0["projection_parameters"]["fx"] >> FX;
+        ROS_INFO_STREAM("Pinhole model detected. Focal length (fx): " << FX);
+    }
+    else
+    {
+        ROS_ERROR_STREAM("Unknown camera model type: " << model_type);
+        return;
+    }
 
     if(NUM_OF_CAM == 2)
     {
