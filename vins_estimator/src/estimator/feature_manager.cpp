@@ -332,7 +332,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             //cout << "right pose " << rightPose << endl;
 
             double baseline = (t1 - t0).norm();
-            ROS_INFO("TEST BASELINE: %f", baseline);
+            // ROS_INFO("TEST BASELINE: %f", baseline);
 
             //提取特征点的左右观测
             Eigen::Vector2d point0, point1;
@@ -350,7 +350,7 @@ void FeatureManager::triangulate(int frameCnt, Vector3d Ps[], Matrix3d Rs[], Vec
             localPoint = leftPose.leftCols<3>() * point3d + leftPose.rightCols<1>();
             double depth = localPoint.z();
 
-            ROS_INFO("feature id %d, depth from disparity: %f, depth from triangulation: %f", it_per_id.feature_id, depth_disparity, depth);
+            // ROS_INFO("feature id %d, depth from disparity: %f, depth from triangulation: %f", it_per_id.feature_id, depth_disparity, depth);
             if (depth_disparity > 0)
                 it_per_id.estimated_depth = depth_disparity;
             else

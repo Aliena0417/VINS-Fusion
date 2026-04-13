@@ -76,6 +76,7 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
 #endif
 
     residual = depth_weight * depth_weight * sqrt_info * residual;
+    // residual = depth_weight * sqrt_info * residual;
     // residual = sqrt_info * residual;
 
     if (jacobians)
@@ -99,7 +100,9 @@ bool ProjectionTwoFrameOneCamFactor::Evaluate(double const *const *parameters, d
         reduce << 1. / dep_j, 0, -pts_camera_j(0) / (dep_j * dep_j),
             0, 1. / dep_j, -pts_camera_j(1) / (dep_j * dep_j);
 #endif
+
         reduce = sqrt_info * depth_weight * depth_weight * reduce;
+        // reduce = sqrt_info * depth_weight * reduce;
         // reduce = sqrt_info * reduce;
 
         if (jacobians[0])
